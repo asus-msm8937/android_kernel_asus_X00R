@@ -55,7 +55,15 @@
 #define ANC_DETECT_RETRY_CNT 7
 #define WCD_MBHC_SPL_HS_CNT  2
 
+#if 0
+#undef pr_debug
+#define pr_debug pr_err
+#undef dev_dbg
+#define dev_dbg dev_err
+#endif
+
 static int det_extn_cable_en;
+static int det_Selfiestick_ins = 0;    // lihaiyan@wind-mobi.com for selfie stick
 module_param(det_extn_cable_en, int,
 		S_IRUGO | S_IWUSR | S_IWGRP);
 MODULE_PARM_DESC(det_extn_cable_en, "enable/disable extn cable detect");
@@ -506,7 +514,10 @@ static void wcd_mbhc_set_and_turnoff_hph_padac(struct wcd_mbhc *mbhc)
 	} else {
 		pr_debug("%s PA is off\n", __func__);
 	}
-	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPH_PA_EN, 0);
+	//duanqianshuai@wind-mobi.com start 20180313 modify for bug
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHR_PA_EN, 1);
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHL_PA_EN, 1);
+	//duanqianshuai@wind-mobi.com end 20180313 modify for bug
 	usleep_range(wg_time * 1000, wg_time * 1000 + 50);
 }
 
@@ -578,6 +589,11 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				~WCD_MBHC_JACK_BUTTON_MASK;
 		}
 
+		// lihaiyan@wind-mobi.com  for selfie stick	+++
+		det_Selfiestick_ins = 0;
+		printk("[wind_audio]%s:  set det_Selfiestick_ins=%d\n", __func__, det_Selfiestick_ins);
+		// lihaiyan@wind-mobi.com  for selfie stick	---
+
 		if (mbhc->micbias_enable) {
 			if (mbhc->mbhc_cb->mbhc_micbias_control)
 				mbhc->mbhc_cb->mbhc_micbias_control(
@@ -600,7 +616,11 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 			 jack_type, mbhc->hph_status);
 		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
 				mbhc->hph_status, WCD_MBHC_JACK_MASK);
+        // wangjun@wind-mobi.com 20180406 begin
+        #ifndef CONFIG_AUDIO_PA_FLAG
 		wcd_mbhc_set_and_turnoff_hph_padac(mbhc);
+        #endif
+        // wangjun@wind-mobi.com 20180406 end
 		hphrocp_off_report(mbhc, SND_JACK_OC_HPHR);
 		hphlocp_off_report(mbhc, SND_JACK_OC_HPHL);
 		mbhc->current_plug = MBHC_PLUG_TYPE_NONE;
@@ -834,7 +854,46 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 						SND_JACK_HEADPHONE);
 			if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET)
 				wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADSET);
-		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_UNSUPPORTED);
+		// lihaiyan@wind-mobi.com  for selfie stick +++
+		//wcd_mbhc_report_plug(mbhc, 1, SND_JACK_UNSUPPORTED);
+           /*
+            * calculate impedance detection
+            * If Zl and Zr > 20k then it is special accessory
+            * otherwise unsupported cable.
+            */
+		   printk("[wind_audio]%s: mbhc->impedance_detect=%d\n", __func__,mbhc->impedance_detect);
+           if (mbhc->impedance_detect) {
+                mbhc->mbhc_cb->compute_impedance(mbhc,
+                        &mbhc->zl, &mbhc->zr);
+
+				printk("[wind_audio]%s: mbhc->zl=%u, mbhc->zr=%u \n", __func__, mbhc->zl, mbhc->zr);
+                if ((mbhc->zl > 20000) && (mbhc->zr > 20000)) {
+                    printk("[wind_audio]%s: special accessory \n", __func__);
+                    /* Toggle switch back */
+                    if (mbhc->mbhc_cfg->swap_gnd_mic &&
+                        mbhc->mbhc_cfg->swap_gnd_mic(mbhc->codec)) {
+                        printk("%s: US_EU gpio present,flip switch again\n"
+                                 , __func__);
+                    }
+                    det_Selfiestick_ins = 1;
+                    wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADSET);
+                    // add code start
+                    if (mbhc->is_hs_recording)
+                        wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_MB);
+                    else if ((test_bit(WCD_MBHC_EVENT_PA_HPHL, &mbhc->event_state)) ||
+                        (test_bit(WCD_MBHC_EVENT_PA_HPHR, &mbhc->event_state)))
+                      wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_PULLUP);
+                    else
+                        wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_CS);
+                   //add code end
+                }
+                else {
+					printk("[wind_audio]%s: start wcd_mbhc_report_plug \n", __func__);
+                    wcd_mbhc_report_plug(mbhc, 1, SND_JACK_UNSUPPORTED);
+                }
+            }
+		// lihaiyan@wind-mobi.com  for selfie stick ---
+
 	} else if (plug_type == MBHC_PLUG_TYPE_HEADSET) {
 		if (mbhc->mbhc_cfg->enable_anc_mic_detect)
 			anc_mic_found = wcd_mbhc_detect_anc_plug_type(mbhc);
@@ -849,7 +908,31 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 		 */
 		wcd_mbhc_report_plug(mbhc, 1, jack_type);
 	} else if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH) {
-		if (mbhc->mbhc_cfg->detect_extn_cable) {
+		// lihaiyan@wind-mobi.com  for selfie stick +++
+	    /*
+        * calculate impedance detection
+        * If Zl and Zr > 20k then it is special accessory
+        * otherwise unsupported cable.
+        */
+        mbhc->mbhc_cb->compute_impedance(mbhc,&mbhc->zl, &mbhc->zr);
+        if (mbhc->impedance_detect && (mbhc->zl > 20000) && (mbhc->zr > 20000)) {
+               pr_debug("%s: special accessory \n", __func__);
+               /* Toggle switch back */
+               det_Selfiestick_ins = 1;
+               wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADSET);
+               // add code start
+               if (mbhc->is_hs_recording)
+                   wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_MB);
+               else if ((test_bit(WCD_MBHC_EVENT_PA_HPHL, &mbhc->event_state)) ||
+                   (test_bit(WCD_MBHC_EVENT_PA_HPHR, &mbhc->event_state)))
+                   wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_PULLUP);
+               else
+                   wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_CS);
+              //add code end
+		}else if (mbhc->mbhc_cfg->detect_extn_cable) {
+
+		// lihaiyan@wind-mobi.com  for selfie stick ---
+
 			/* High impedance device found. Report as LINEOUT */
 			wcd_mbhc_report_plug(mbhc, 1, SND_JACK_LINEOUT);
 			pr_debug("%s: setup mic trigger for further detection\n",
@@ -1095,7 +1178,12 @@ static void wcd_enable_mbhc_supply(struct wcd_mbhc *mbhc,
 		} else if (plug_type == MBHC_PLUG_TYPE_HEADPHONE) {
 			wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_CS);
 		} else {
-			wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_NONE);
+			// lihaiyan@wind-mobi.com  for selfie stick +++
+			printk("[wind_audio]%s: det_Selfiestick_ins=%d \n", __func__,det_Selfiestick_ins);
+			if(det_Selfiestick_ins != 1){
+				wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_NONE);
+			}
+			// lihaiyan@wind-mobi.com  for selfie stick ---
 		}
 	}
 }

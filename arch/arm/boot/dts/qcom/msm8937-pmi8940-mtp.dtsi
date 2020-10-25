@@ -16,24 +16,33 @@
 #include "msm8937-audio-mtp.dtsi"
 
 &soc {
-	led_flash0: qcom,camera-flash {
+/*******zhenglihong@wind-mobi.com 20171017 begin*************/
+	led_flash0: qcom,camera-flash@0 {
 		cell-index = <0>;
 		compatible = "qcom,camera-flash";
 		qcom,flash-type = <1>;
-		qcom,flash-source = <&pmi8940_flash0 &pmi8940_flash1>;
-		qcom,torch-source = <&pmi8940_torch0 &pmi8940_torch1>;
+		qcom,flash-source = <&pmi8940_flash0>;
+		qcom,torch-source = <&pmi8940_torch0>;
 		qcom,switch-source = <&pmi8940_switch>;
+		status = "ok";
+	};
+	led_flash1: qcom,camera-flash@1 {
+		cell-index = <1>;
+		compatible = "qcom,camera-flash";
+		qcom,flash-type = <1>;
+		qcom,flash-source = <&pmi8940_flash1>;
+		qcom,torch-source = <&pmi8940_torch1>;
+		qcom,switch-source = <&pmi8940_switch>;
+		status = "ok";
 	};
 };
-
+/*******zhenglihong@wind-mobi.com 20171017 end*************/
 /{
 	mtp_batterydata: qcom,battery-data {
-		qcom,batt-id-range-pct = <15>;
-		#include "batterydata-itech-3000mah.dtsi"
-		#include "batterydata-ascent-3450mAh.dtsi"
+		qcom,batt-id-range-pct = <60>;     //modify batt_id torance value
+		#include "3308404_Wind_A305cos_3000mAh_averaged_MasterSlave_Feb26th2018_PMI8940.dtsi"    //lvwenkang@wind-mobi.com 
 	};
 };
-
 &pmi8940_fg {
 	qcom,battery-data = <&mtp_batterydata>;
 };
@@ -47,6 +56,9 @@
 &mdss_dsi0 {
 	lab-supply = <&lab_regulator>;
 	ibb-supply = <&ibb_regulator>;
+// wangbing@wind-mobi.com 20180428 begin >>> [4/14] modify the power on sequence
+	vdd_ana-supply = <&pm8937_l6>;
+// wangbing@wind-mobi.com 20180428 end   <<< [4/14] modify the power on sequence
 };
 
 &mdss_dsi1 {
@@ -71,6 +83,8 @@
 		qcom,supply-max-voltage = <6000000>;
 		qcom,supply-enable-load = <100000>;
 		qcom,supply-disable-load = <100>;
+		qcom,supply-pre-on-sleep =<0>; 
+		qcom,supply-post-on-sleep =<1>;
 	};
 
 	qcom,panel-supply-entry@3 {
@@ -80,6 +94,24 @@
 		qcom,supply-max-voltage = <6000000>;
 		qcom,supply-enable-load = <100000>;
 		qcom,supply-disable-load = <100>;
-		qcom,supply-post-on-sleep = <20>;
+		qcom,supply-pre-on-sleep =<0>; 
+		qcom,supply-post-on-sleep = <40>;
 	};
+
+// wangbing@wind-mobi.com 20180428 begin >>> [5/14] modify the power on sequence
+	qcom,panel-supply-entry@4 {
+		reg = <4>;
+		qcom,supply-name = "vdd_ana";
+		qcom,supply-min-voltage = <1800000>;
+		qcom,supply-max-voltage = <1800000>;
+		qcom,supply-enable-load = <100000>;
+		qcom,supply-disable-load = <100>;
+		qcom,supply-pre-on-sleep = <0>; 
+		qcom,supply-post-on-sleep = <40>;
+	};
+// wangbing@wind-mobi.com 20180428 end   <<< [5/14] modify the power on sequence
+};
+
+&usb_otg {
+	qcom,usbin-vadc = <&pmi8940_vadc>;
 };

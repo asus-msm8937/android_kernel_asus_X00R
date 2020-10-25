@@ -27,11 +27,12 @@
 		clocks = <&clock_gcc clk_gcc_mdss_ahb_clk>;
 		clock-names = "iface_clk";
 		clock-rate = <0>;
+		/* wangjun@wind-mobi.com 20180319 
 		qcom,dsi-pll-ssc-en;
 		qcom,dsi-pll-ssc-mode = "down-spread";
 		qcom,ssc-frequency-hz = <30000>;
 		qcom,ssc-ppm = <5000>;
-
+		*/
 		qcom,platform-supply-entries {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -72,11 +73,12 @@
 		clocks = <&clock_gcc clk_gcc_mdss_ahb_clk>;
 		clock-names = "iface_clk";
 		clock-rate = <0>;
+		/* wangjun@wind-mobi.com 20180319 
 		qcom,dsi-pll-ssc-en;
 		qcom,dsi-pll-ssc-mode = "down-spread";
 		qcom,ssc-frequency-hz = <30000>;
 		qcom,ssc-ppm = <5000>;
-
+		*/
 		qcom,platform-supply-entries {
 			#address-cells = <1>;
 			#size-cells = <0>;

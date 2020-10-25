@@ -1135,19 +1135,48 @@ config TOUCHSCREEN_MAXIM_STI
 	  To compile this driver as a module, choose M here: the
 	  module will be called maxim_sti.
 
-source "drivers/input/touchscreen/gt9xx/Kconfig"
-source "drivers/input/touchscreen/focaltech_touch/Kconfig"
-
-config TOUCHSCREEN_HIMAX_CHIPSET
-	bool "Himax touchpanel CHIPSET"
+#wangbing@wind-mobi.com 20180316 start
+config TOUCHSCREEN_HIMAX_HX83102_A306
+	bool "Himax touchpanel HX83102"
 	depends on I2C
 	help
-	  Say Y here if you have a Himax CHIPSET touchscreen.
+	  Say Y here if you have a Himax HX83102 touchscreen.
 	  HIMAX controllers are multi touch controllers which can
 	  report 10 touches at a time.
 
-          If unsure, say N.
+	  If unsure, say N.
+#wangbing@wind-mobi.com 20180316 end
 
-source "drivers/input/touchscreen/hxchipset/Kconfig"
+#zhaoopengfei@wind-mobi.com 20180815 start
+config TOUCHSCREEN_MASTAR_A306
+	bool "Mastar TP Msg2836"
+	depends on I2C
+	help
+	  Say Y here if you have a Msg2836 touchscreen.
+	  MASTAR controllers are multi touch controllers which can
+	  report 10 touches at a time.
+
+	  If unsure, say N.
+#zhaopengfei@wind-mobi.com 20180815 end
+
+source "drivers/input/touchscreen/gt9xx/Kconfig"
+
+#heiao@wind-mobi.com 20180111
+source "drivers/input/touchscreen/ft5346i/Kconfig"
+source "drivers/input/touchscreen/gt917d/Kconfig"
+source "drivers/input/touchscreen/HX852xES/Kconfig"
+#heiao@wind-mobi.com 20180112
+
+#wangjun@wind-mobi.com 20180228 begin
+source "drivers/input/touchscreen/HX852xES_A306/Kconfig"
+#wangjun@wind-mobi.com 20180228 end
+
+#wangbing@wind-mobi.com 20180316 begin
+source "drivers/input/touchscreen/hx83102_A306/Kconfig"
+#wangbing@wind-mobi.com 20180316 end
+
+#zhaopengfei@wind-mobi.com 20180713 begin
+source "drivers/input/touchscreen/Mastar_TP/Kconfig"
+#zhaopengfei@wind-mobi.com 20180713 end
 
 endif

@@ -15,6 +15,7 @@
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/mdss_io_util.h>
+#include "mdss_dsi.h"	//zhaopengfei@wind-mobi.com 20180416 add
 
 #define MAX_I2C_CMDS  16
 void dss_reg_w(struct dss_io_data *io, u32 offset, u32 value, u32 debug)
@@ -135,6 +136,10 @@ void msm_dss_iounmap(struct dss_io_data *io_data)
 } /* msm_dss_iounmap */
 EXPORT_SYMBOL(msm_dss_iounmap);
 
+// wangbing@wind-mobi.com 20180428 begin >>> [11/14] modify the power on sequence
+struct regulator *iovdd_l6;
+// wangbing@wind-mobi.com 20180428 end   <<< [11/14] modify the power on sequence
+
 int msm_dss_config_vreg(struct device *dev, struct dss_vreg *in_vreg,
 	int num_vreg, int config)
 {
@@ -172,6 +177,14 @@ int msm_dss_config_vreg(struct device *dev, struct dss_vreg *in_vreg,
 						curr_vreg->vreg_name);
 					goto vreg_set_voltage_fail;
 				}
+
+// wangbing@wind-mobi.com 20180428 begin >>> [12/14] modify the power on sequence
+				if(!strcmp(curr_vreg->vreg_name, "vdd_ana")) {
+					iovdd_l6 = curr_vreg->vreg;
+					printk("[WLCD][%s][%d] get the %s\n", __FUNCTION__, __LINE__, curr_vreg->vreg_name);
+				}
+// wangbing@wind-mobi.com 20180428 end   <<< [12/14] modify the power on sequence
+
 			}
 		}
 	} else {
@@ -256,13 +269,63 @@ error:
 	return rc;
 }
 EXPORT_SYMBOL(msm_dss_config_vreg_opt_mode);
+//zhaopengfei@wind-mobi.com 20180413begin
+/*
+msm_dss_enable_vreg();
+Logic:
+|----------|---------|------------------------|-----------------------------------------------------------------|
+| power    |  panel  | hx83102 gesture enable |                           description                           |
+|----------|---------|------------------------|-----------------------------------------------------------------|
+|          |         | enable                 |do nothing (suspend), power on (resume)--decided by pow_flag 306 |
+|          | hx83102 |------------------------|-----------------------------------------------------------------|
+| LDO6     |         | disable                |power off (suspend), power on (resume)--decided by pow_flag 310  |
+| vdd-ana  |---------|------------------------|-----------------------------------------------------------------|
+|          | other   | enable                 |                                                                 |
+|          | panel   | -----------------------| do nothing (continue loop ) 314                                 |
+|          |         | disable                |                                                                 |
+|----------|---------|------------------------|-----------------------------------------------------------------|
+|          |         | enable                 | do nothing (continue loop ) 319                                 |
+|          | hx83102 |------------------------|-----------------------------------------------------------------|
+| lab ibb  |         | disable                |  normal ops                 321                                 |
+| vsp vsn  |---------|------------------------|-----------------------------------------------------------------|
+|          | other   | enable                 |                                                                 |
+|          | panel   | -----------------------| normal ops                  321                                 |
+|          |         | disable                |                                                                 |
+|----------|---------|------------------------|-----------------------------------------------------------------|
+|          |         | enable                 |                                                                 |
+|          | hx83102 |------------------------|                                                                 |
+|          |         | disable                |                                                                 |
+| other    |---------|------------------------| normal ops                                                      |
+|          | other   | enable                 |                                                                 |
+|          | panel   |------------------------|                                                                 |
+|          |         | disable                |                                                                 |
+|----------|---------|------------------------|-----------------------------------------------------------------|
+ */
+
+/* panel name */
+extern char caPanelName[256];
 
 int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 {
+	char hx83102_lcm_name[256] = "HX83102_B 720p video mode dsi panel";
 	int i = 0, rc = 0;
 	bool need_sleep;
 	if (enable) {
 		for (i = 0; i < num_vreg; i++) {
+// wangbing@wind-mobi.com 20180428 begin >>> [13/14] modify the power on sequence
+			if(!strcmp(in_vreg[i].vreg_name, "vdd_ana") || !strcmp(in_vreg[i].vreg_name, "vddio")) {
+				printk("[WLCD][%s][%d] ignore %s at power on\n", __FUNCTION__, __LINE__, in_vreg[i].vreg_name);
+				continue;
+			}
+// wangbing@wind-mobi.com 20180428 end   <<< [13/14] modify the power on sequence
+
+			if((!strcmp(in_vreg[i].vreg_name, "ibb") || !strcmp(in_vreg[i].vreg_name, "lab")) && !strcmp(hx83102_lcm_name, caPanelName) && hx83102_gestrue_flag != 0) {
+				continue;
+			} else if(!strcmp(in_vreg[i].vreg_name, "ibb") || !strcmp(in_vreg[i].vreg_name, "lab")) {
+				goto wind_normal_enable;
+			}
+
+wind_normal_enable:
 			rc = PTR_RET(in_vreg[i].vreg);
 			if (rc) {
 				DEV_ERR("%pS->%s: %s regulator error. rc=%d\n",
@@ -295,6 +358,20 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 		}
 	} else {
 		for (i = num_vreg-1; i >= 0; i--) {
+// wangbing@wind-mobi.com 20180428 begin >>> [14/14] modify the power on sequence
+			if(!strcmp(in_vreg[i].vreg_name, "vdd_ana") || !strcmp(in_vreg[i].vreg_name, "vddio")) {
+				printk("[WLCD][%s][%d] ignore %s at power off\n", __FUNCTION__, __LINE__, in_vreg[i].vreg_name);
+				continue;
+			}
+// wangbing@wind-mobi.com 20180428 end   <<< [14/14] modify the power on sequence
+
+			if((!strcmp(in_vreg[i].vreg_name, "ibb") || !strcmp(in_vreg[i].vreg_name, "lab")) && !strcmp(hx83102_lcm_name, caPanelName) && hx83102_gestrue_flag != 0) {
+				continue;
+			} else if(!strcmp(in_vreg[i].vreg_name, "ibb") || !strcmp(in_vreg[i].vreg_name, "lab")) {
+				goto wind_normal_disable;
+			}
+
+wind_normal_disable:
 			if (in_vreg[i].pre_off_sleep)
 				usleep_range(in_vreg[i].pre_off_sleep * 1000,
 					in_vreg[i].pre_off_sleep * 1000);

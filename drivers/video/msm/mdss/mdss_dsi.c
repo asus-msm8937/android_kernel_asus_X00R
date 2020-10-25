@@ -37,6 +37,16 @@
 #define XO_CLK_RATE	19200000
 #define CMDLINE_DSI_CTL_NUM_STRING_LEN 2
 
+//zhaopengfei@wind-mobi.com 20180410 begin
+/**
+ * only the panel is HX83102 and the HX83102 gesture enable:
+ *      hx83102_gestrue_flag = 1
+ * other panel or HX83102 gesture disable:
+ *      hx83102_gestrue_flag = 0
+ */
+int hx83102_gestrue_flag = 0;
+//zhaopengfei@wind-mobi.com 20180410 end
+
 /* Master structure to hold all the information about the DSI/panel */
 static struct mdss_dsi_data *mdss_dsi_res;
 
@@ -272,6 +282,12 @@ static int mdss_dsi_regulator_init(struct platform_device *pdev,
 	return rc;
 }
 
+// wangbing@wind-mobi.com 20180428 begin >>> [6/14] modify the power on sequence
+extern u32 panel_power_on_sequence_type;
+extern int hx83102_gestrue_flag;
+extern struct regulator *iovdd_l6;
+// wangbing@wind-mobi.com 20180428 end   <<< [6/14] modify the power on sequence
+
 static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 {
 	int ret = 0;
@@ -286,21 +302,53 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-	ret = mdss_dsi_panel_reset(pdata, 0);
-	if (ret) {
-		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
-		ret = 0;
+// wangbing@wind-mobi.com 20180428 begin >>> [7/14] modify the power on sequence
+	if(0 == panel_power_on_sequence_type) {
+		ret = mdss_dsi_panel_reset(pdata, 0);
+		if (ret) {
+			pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
+			ret = 0;
+		}
+
+		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
+			pr_debug("reset disable: pinctrl not enabled\n");
+
+		ret = msm_dss_enable_vreg(
+			ctrl_pdata->panel_power_data.vreg_config,
+			ctrl_pdata->panel_power_data.num_vreg, 0);
+		if (ret)
+			pr_err("%s: failed to disable vregs for %s\n",
+				__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+	} else if (1 == panel_power_on_sequence_type) {
+		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
+			pr_debug("reset disable: pinctrl not enabled\n");
+
+		ret = msm_dss_enable_vreg(
+			ctrl_pdata->panel_power_data.vreg_config,
+			ctrl_pdata->panel_power_data.num_vreg, 0);
+		if (ret)
+			pr_err("%s: failed to disable vregs for %s\n",
+				__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+		mdelay(10);
+		ret = mdss_dsi_panel_reset(pdata, 0);
+		if (ret) {
+			pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
+			ret = 0;
+		}
 	}
 
-	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
-		pr_debug("reset disable: pinctrl not enabled\n");
+	regulator_set_voltage(iovdd_l6, 1800000, 1800000);
+	regulator_set_optimum_mode(iovdd_l6, 200000);
 
-	ret = msm_dss_enable_vreg(
-		ctrl_pdata->panel_power_data.vreg_config,
-		ctrl_pdata->panel_power_data.num_vreg, 0);
-	if (ret)
-		pr_err("%s: failed to disable vregs for %s\n",
-			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+	if(0 == hx83102_gestrue_flag) {
+        // wangjun@wind-mobi.com 20800913 begin
+		// ret = regulator_disable(iovdd_l6); 
+		//printk("[WLCD][%s][%d] normal mode: disable the iovdd\n", __FUNCTION__, __LINE__);
+		// if(ret < 0)
+		//	printk("[WLCD][%s][%d] disable the iovdd failed\n", __FUNCTION__, __LINE__);
+        // wangjun@wind-mobi.com 20800913 end
+	}
+// wangbing@wind-mobi.com 20180428 end   <<< [7/14] modify the power on sequence
 
 end:
 	return ret;
@@ -318,31 +366,78 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-	ret = msm_dss_enable_vreg(
-		ctrl_pdata->panel_power_data.vreg_config,
-		ctrl_pdata->panel_power_data.num_vreg, 1);
-	if (ret) {
-		pr_err("%s: failed to enable vregs for %s\n",
-			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
-		return ret;
+// wangbing@wind-mobi.com 20180428 begin >>> [8/14] modify the power on sequence
+	if(0 == hx83102_gestrue_flag)
+	{
+		regulator_set_voltage(iovdd_l6, 1800000, 1800000);
+		regulator_set_optimum_mode(iovdd_l6, 200000);
+        // wangjun@wind-mobi.com 20800913 begin 
+        if(!regulator_is_enabled(iovdd_l6))
+        {
+		    ret = regulator_enable(iovdd_l6);
+            printk("[WLCD][%s][%d] enable the iovdd when lcd resume\n", __FUNCTION__, __LINE__);
+    		if(ret < 0)
+    			printk("[WLCD][%s][%d] enable the iovdd failed\n", __FUNCTION__, __LINE__);
+        }
+        // wangjun@wind-mobi.com 20800913 end
+		
 	}
 
-	/*
-	 * If continuous splash screen feature is enabled, then we need to
-	 * request all the GPIOs that have already been configured in the
-	 * bootloader. This needs to be done irresepective of whether
-	 * the lp11_init flag is set or not.
-	 */
-	if (pdata->panel_info.cont_splash_enabled ||
-		!pdata->panel_info.mipi.lp11_init) {
-		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
-			pr_debug("reset enable: pinctrl not enabled\n");
+	mdelay(1);
+	if(0 == panel_power_on_sequence_type) {
+		ret = msm_dss_enable_vreg(
+			ctrl_pdata->panel_power_data.vreg_config,
+			ctrl_pdata->panel_power_data.num_vreg, 1);
+		if (ret) {
+			pr_err("%s: failed to enable vregs for %s\n",
+				__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+			return ret;
+		}
 
-		ret = mdss_dsi_panel_reset(pdata, 1);
-		if (ret)
-			pr_err("%s: Panel reset failed. rc=%d\n",
-					__func__, ret);
+		/*
+		 * If continuous splash screen feature is enabled, then we need to
+		 * request all the GPIOs that have already been configured in the
+		 * bootloader. This needs to be done irresepective of whether
+		 * the lp11_init flag is set or not.
+		 */
+		if (pdata->panel_info.cont_splash_enabled ||
+			!pdata->panel_info.mipi.lp11_init) {
+			if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
+				pr_debug("reset enable: pinctrl not enabled\n");
+
+			ret = mdss_dsi_panel_reset(pdata, 1);
+			if (ret)
+				pr_err("%s: Panel reset failed. rc=%d\n",
+						__func__, ret);
+		}
+	}else if (1 == panel_power_on_sequence_type) {
+		/*
+		 * If continuous splash screen feature is enabled, then we need to
+		 * request all the GPIOs that have already been configured in the
+		 * bootloader. This needs to be done irresepective of whether
+		 * the lp11_init flag is set or not.
+		 */
+		if (pdata->panel_info.cont_splash_enabled ||
+			!pdata->panel_info.mipi.lp11_init) {
+			if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
+				pr_debug("reset enable: pinctrl not enabled\n");
+
+			ret = mdss_dsi_panel_reset(pdata, 1);
+			if (ret)
+				pr_err("%s: Panel reset failed. rc=%d\n",
+						__func__, ret);
+		}
+
+		ret = msm_dss_enable_vreg(
+			ctrl_pdata->panel_power_data.vreg_config,
+			ctrl_pdata->panel_power_data.num_vreg, 1);
+		if (ret) {
+			pr_err("%s: failed to enable vregs for %s\n",
+				__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+			return ret;
+		}
 	}
+// wangbing@wind-mobi.com 20180428 end   <<< [8/14] modify the power on sequence
 
 	return ret;
 }

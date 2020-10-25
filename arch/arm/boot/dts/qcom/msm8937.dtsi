@@ -35,7 +35,7 @@
 					dev = "/dev/block/platform/soc/7824900.sdhci/by-name/vendor";
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
-					fsmgr_flags = "wait,verify";
+					fsmgr_flags = "wait";
 					status = "ok";
 				};
 			};
@@ -1139,6 +1139,10 @@
 		qcom,enable-sdp-typec-current-limit;
 		qcom,hsusb-otg-delay-lpm;
 
+		/* zhangkaiyan@wind-mobi.com 20171211 begin */
+		qcom,hsusb-otg-phy-init-seq = <0x44 0x80 0x6B 0x81 0x33 0x82 0x33 0x83 0xffffffff>;
+		/* zhangkaiyan@wind-mobi.com 20171211 end */
+
 		qcom,msm-bus,name = "usb2";
 		qcom,msm-bus,num-cases = <3>;
 		qcom,msm-bus,num-paths = <1>;
@@ -1237,9 +1241,9 @@
 			reg = <0x10 8>;
 		};
 
-		dload_type@1c {
+		dload_type@18 {
 			compatible = "qcom,msm-imem-dload-type";
-			reg = <0x1c 4>;
+			reg = <0x18 4>;
 		};
 
 		restart_reason@65c {

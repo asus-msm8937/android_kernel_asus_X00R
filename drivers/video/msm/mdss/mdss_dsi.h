@@ -24,6 +24,12 @@
 #include "mdss_dsi_cmd.h"
 #include "mdss_dsi_clk.h"
 
+// zhaopengfei@wind-mobi.com 20180410 begin <<< add the debug log
+extern int hx83102_gestrue_flag;
+extern int pow_flag;
+#define zpf(fmt, arg...) printk(KERN_ERR "[own][%s][%d] "fmt"\n", __func__, __LINE__, ##arg)
+// zhaopengfei@wind-mobi.com 20180410 end   <<<  add the debug log
+
 #define MMSS_SERDES_BASE_PHY 0x04f01000 /* mmss (De)Serializer CFG */
 
 #define MIPI_OUTP(addr, data) writel_relaxed((data), (addr))

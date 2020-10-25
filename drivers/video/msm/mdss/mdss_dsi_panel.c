@@ -443,6 +443,12 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 				if (pdata->panel_info.rst_seq[++i])
 					usleep_range(pinfo->rst_seq[i] * 1000, pinfo->rst_seq[i] * 1000);
 			}
+//liuxiong@wind-mobi.com 20180903 begin
+			if (pdata->panel_info.panel_dead) {
+				usleep_range(100 * 1000, 100 * 1000);
+				pr_err("[shawn] lcd esd ,reset high need add 100ms\n");
+			}
+//liuxiong@wind-mobi.com 20180903 end
 
 			if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
 				rc = gpio_direction_output(
@@ -486,7 +492,20 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			usleep_range(100, 110);
 			gpio_free(ctrl_pdata->disp_en_gpio);
 		}
-		gpio_set_value((ctrl_pdata->rst_gpio), 0);
+
+//zhaopengfei@wind-mobi.com 20180410 begin >>RST
+		/* if panel is HX83103 and the HX83102 gesture is enable this flag will be 1 */
+		if(hx83102_gestrue_flag) {
+			/* set lcd reset pin = 1 when the lcd suspend */
+			gpio_set_value((ctrl_pdata->rst_gpio), 1);
+			zpf("LCD RST = 1");
+		} else {
+			/* set lcd reset pin = 0 when the lcd suspend */
+			gpio_set_value((ctrl_pdata->rst_gpio), 0);
+			zpf("LCD RST = 0");
+		}
+//zhaopengfei@wind-mobi.com 20180410 end >>RST
+
 		gpio_free(ctrl_pdata->rst_gpio);
 		if (gpio_is_valid(ctrl_pdata->mode_gpio))
 			gpio_free(ctrl_pdata->mode_gpio);
@@ -2589,6 +2608,17 @@ static int mdss_panel_parse_dt_hdmi(struct device_node *np,
 	return 0;
 }
 #endif
+
+// wangbing@wind-mobi.com 20180428 begin >>> [9/14] modify the power on sequence
+/*
+ * 0: power on:  iovdd   -> vsp vsn -> reset
+ *    power off: reset   -> vsp vsn -> iovdd
+ * 1: power on:  iovdd   -> reset   -> vsp vsn
+ *    power off: vsp vsn -> reset   -> iovdd
+ */
+u32 panel_power_on_sequence_type = 0;
+// wangbing@wind-mobi.com 20180428 end   <<< [9/14] modify the power on sequence
+
 static int mdss_panel_parse_dt(struct device_node *np,
 			struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
@@ -2601,6 +2631,17 @@ static int mdss_panel_parse_dt(struct device_node *np,
 
 	if (mdss_dsi_is_hw_config_split(ctrl_pdata->shared_data))
 		pinfo->is_split_display = true;
+
+// wangbing@wind-mobi.com 20180428 begin >>> [10/14] modify the power on sequence
+	rc = of_property_read_u32(np, "wind,mdss-dsi-power-on-sequence-type", &tmp);
+	if (rc) {
+		pr_err("%s:%d, panel power on sequence type read failed!\n", __func__, __LINE__);
+		panel_power_on_sequence_type = 0;
+	} else {
+		panel_power_on_sequence_type = tmp;
+		printk("[WLCD][%s][%d] panel_power_on_sequence_type = %d\n", __func__, __LINE__, panel_power_on_sequence_type);
+	}
+// wangbing@wind-mobi.com 20180428 end   <<< [10/14] modify the power on sequence
 
 	rc = of_property_read_u32(np,
 		"qcom,mdss-pan-physical-width-dimension", &tmp);
@@ -2839,6 +2880,9 @@ error:
 	return -EINVAL;
 }
 
+// wangjun@wind-mobi.com 20180314 begin 
+char caPanelName[MDSS_MAX_PANEL_LEN] = {0};
+// wangjun@wind-mobi.com 20180314 end
 int mdss_dsi_panel_init(struct device_node *node,
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 	int ndx)
@@ -2862,6 +2906,9 @@ int mdss_dsi_panel_init(struct device_node *node,
 						__func__, __LINE__);
 	} else {
 		pr_info("%s: Panel Name = %s\n", __func__, panel_name);
+// wangjun@wind-mobi.com 20180314 begin 
+        strlcpy(caPanelName, panel_name, MDSS_MAX_PANEL_LEN);
+// wangjun@wind-mobi.com 20180314 end
 		strlcpy(&pinfo->panel_name[0], panel_name, MDSS_MAX_PANEL_LEN);
 	}
 	rc = mdss_panel_parse_dt(node, ctrl_pdata);

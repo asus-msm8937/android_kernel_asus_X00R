@@ -627,4 +627,12 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+
+config WIND_DEVICE_INFO
+	bool "CONFIG_WIND_DEVICE_INFO"
+	default y
+	help
+		Select y or n
+
+source "drivers/misc/dtv/fc8350/Kconfig"		
 endmenu

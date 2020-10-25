@@ -50,13 +50,17 @@
 
 #define MSM_SENSOR_BYPASS_VIDEO_NODE    1
 
+//chengpeng@wind-mobi.com 20180712 begin
 enum msm_sensor_camera_id_t {
 	CAMERA_0,
 	CAMERA_1,
 	CAMERA_2,
 	CAMERA_3,
+	CAMERA_4,
+	CAMERA_5,
 	MAX_CAMERAS,
 };
+//chengpeng@wind-mobi.com 20180712 end
 
 enum i2c_freq_mode_t {
 	I2C_STANDARD_MODE,
@@ -242,6 +246,8 @@ enum msm_camera_i2c_operation {
 	MSM_CAM_WRITE = 0,
 	MSM_CAM_POLL,
 	MSM_CAM_READ,
+	MSM_CAM_READ_GC5005,
+	MSM_CAM_READ_LOOP,
 };
 
 struct msm_sensor_i2c_sync_params {
